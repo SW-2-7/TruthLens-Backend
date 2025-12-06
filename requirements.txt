@@ -3,3 +3,9 @@ uvicorn
 python-multipart
 pydantic
 pydantic-settings
+torch
+torchvision
+opencv-python
+pillow
+tqdm
+numpy
