@@ -172,7 +172,8 @@ def generate_gradcam_base64(
     with torch.no_grad():
         output = model(input_tensor)
         probs = torch.softmax(output, dim=1)[0]
-        target_class = 1  # FAKE class for visualization
+        # target_class = 1  # FAKE class for visualization - or use predicted class
+        target_class = output.argmax(dim=1).item()
     
     # Enable gradients for Grad-CAM
     input_tensor.requires_grad_(True)
