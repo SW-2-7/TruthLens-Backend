@@ -5,3 +5,4 @@ class DetectResponse(BaseModel):
     is_fake: bool
     score: float
     heatmap: str | None = None  # Base64 encoded string
+    original_image: str | None = None  # Base64 encoded string

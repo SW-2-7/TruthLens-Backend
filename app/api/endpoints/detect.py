@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Request, HTTPException
 from app.schemas.detect import DetectResponse
 from app.model import predict_from_pil, generate_gradcam_base64
+from app.model.gradcam import image_to_base64
 from PIL import Image
 import io
 
@@ -75,10 +76,14 @@ async def detect_image(request: Request, file: UploadFile = File(...)):
     # Generate Grad-CAM heatmap
     heatmap_base64 = generate_gradcam_base64(model, img, device=device)
     
+    # Convert original image to base64
+    original_base64 = image_to_base64(img)
+    
     # Map model output to API response
     return DetectResponse(
         filename=file.filename,
         is_fake=(result["label"] == "FAKE"),
         score=round(result["fake_probability"] * 100, 2),
-        heatmap=heatmap_base64
+        heatmap=heatmap_base64,
+        original_image=original_base64
     )

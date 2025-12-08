@@ -61,7 +61,8 @@ uvicorn app.main:app --reload
   "filename": "image.jpg",
   "is_fake": true,
   "score": 98.5,
-  "heatmap": "base64_encoded_image..."
+  "heatmap": "base64_encoded_image...",
+  "original_image": "base64_encoded_image..."
 }
 ```
 
