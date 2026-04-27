@@ -31,12 +31,16 @@ class GradCAM:
     def _register_hooks(self):
         def forward_hook(module, input, output):
             self.activations = output.detach()
-        
+
         def backward_hook(module, grad_input, grad_output):
             self.gradients = grad_output[0].detach()
-        
-        self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_full_backward_hook(backward_hook)
+
+        self._forward_handle = self.target_layer.register_forward_hook(forward_hook)
+        self._backward_handle = self.target_layer.register_full_backward_hook(backward_hook)
+
+    def remove_hooks(self):
+        self._forward_handle.remove()
+        self._backward_handle.remove()
     
     def generate(
         self,
@@ -165,24 +169,23 @@ def generate_gradcam_base64(
     # Get target layer
     target_layer = get_target_layer(model)
     
-    # Generate Grad-CAM
-    gradcam = GradCAM(model, target_layer)
-    
     # Forward pass to get prediction
     with torch.no_grad():
         output = model(input_tensor)
-        probs = torch.softmax(output, dim=1)[0]
-        # target_class = 1  # FAKE class for visualization - or use predicted class
         target_class = output.argmax(dim=1).item()
-    
-    # Enable gradients for Grad-CAM
-    input_tensor.requires_grad_(True)
-    heatmap = gradcam.generate(input_tensor, target_class=target_class)
-    
+
+    # Generate Grad-CAM (훅은 finally에서 반드시 제거)
+    gradcam = GradCAM(model, target_layer)
+    try:
+        input_tensor.requires_grad_(True)
+        heatmap = gradcam.generate(input_tensor, target_class=target_class)
+    finally:
+        gradcam.remove_hooks()
+
     # Create overlay
     overlay_image = generate_heatmap_overlay(image, heatmap)
-    
+
     # Convert to base64
     heatmap_base64 = image_to_base64(overlay_image)
-    
+
     return heatmap_base64
