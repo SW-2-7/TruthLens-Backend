@@ -147,7 +147,8 @@ def image_to_base64(image: Image.Image) -> str:
 def generate_gradcam_base64(
     model: nn.Module,
     image: Image.Image,
-    device: Optional[str] = None
+    device: Optional[str] = None,
+    target_class: Optional[int] = None,
 ) -> str:
     """
     Generate Grad-CAM heatmap and return as base64.
@@ -156,23 +157,19 @@ def generate_gradcam_base64(
         model: PyTorch model
         image: PIL Image
         device: Device to run inference on
+        target_class: Target class index (0=REAL, 1=FAKE). If None, uses predicted class.
 
     Returns:
         Heatmap overlay image encoded as base64 string
     """
     if device is None:
         device = next(model.parameters()).device
-    
+
     # Preprocess
     input_tensor = preprocess_pil(image).to(device)
-    
+
     # Get target layer
     target_layer = get_target_layer(model)
-    
-    # Forward pass to get prediction
-    with torch.no_grad():
-        output = model(input_tensor)
-        target_class = output.argmax(dim=1).item()
 
     # Generate Grad-CAM (훅은 finally에서 반드시 제거)
     gradcam = GradCAM(model, target_layer)

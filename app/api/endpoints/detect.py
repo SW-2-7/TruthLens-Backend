@@ -72,9 +72,10 @@ async def detect_image(request: Request, file: UploadFile = File(...)):
     
     # Run inference
     result = predict_from_pil(model, img, device=device)
-    
-    # Generate Grad-CAM heatmap
-    heatmap_base64 = generate_gradcam_base64(model, img, device=device)
+
+    # Generate Grad-CAM heatmap (predicted class reused to avoid extra forward pass)
+    target_class = 1 if result["label"] == "FAKE" else 0
+    heatmap_base64 = generate_gradcam_base64(model, img, device=device, target_class=target_class)
     
     # Convert original image to base64
     original_base64 = image_to_base64(img)
