@@ -69,7 +69,7 @@ class GradCAM:
         self.model.zero_grad()
         one_hot = torch.zeros_like(output)
         one_hot[0, target_class] = 1
-        output.backward(gradient=one_hot, retain_graph=True)
+        output.backward(gradient=one_hot)
         
         # Compute Grad-CAM
         gradients = self.gradients  # (1, C, H, W)
