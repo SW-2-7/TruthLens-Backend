@@ -148,17 +148,17 @@ def generate_gradcam_base64(
     model: nn.Module,
     image: Image.Image,
     device: Optional[str] = None
-) -> Tuple[str, str]:
+) -> str:
     """
     Generate Grad-CAM heatmap and return as base64.
-    
+
     Args:
         model: PyTorch model
         image: PIL Image
         device: Device to run inference on
-    
+
     Returns:
-        Tuple of (label, heatmap_base64)
+        Heatmap overlay image encoded as base64 string
     """
     if device is None:
         device = next(model.parameters()).device
