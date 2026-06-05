@@ -48,46 +48,50 @@ def _compress_to_base64(image: Image.Image, quality: int = 85) -> str:
     return base64.b64encode(buffer.read()).decode("utf-8")
 
 
-def _run_analysis(model: torch.nn.Module, img: Image.Image, device) -> dict:
-    """추론 + GradCAM을 단일 forward/backward pass로 처리."""
-    input_tensor = preprocess_pil(img).to(device)
-    input_tensor.requires_grad_(True)
-    threshold = float(getattr(model, "threshold", 0.5))
+def _run_analysis(detector, img: Image.Image) -> dict:
+    """얼굴 감지 + 앙상블 추론 + EfficientNet-B0 Grad-CAM."""
+    # 1. 얼굴 감지 + 앙상블 점수
+    result = detector.predict(img)
 
-    target_layer = get_target_layer(model)
-    gradcam = GradCAM(model, target_layer)
+    if not result.get("success", True):
+        return result  # no_face 에러 전파
+
+    analyzed_img = result["analyzed_img"]
+    target_class = 1 if result["label"] == "FAKE" else 0
+
+    # 2. Grad-CAM은 primary 모델(EfficientNet-B0, weight 0.8)로 생성
+    #    analyzed_img(얼굴 crop) 기준으로 히트맵 생성
+    primary = detector.primary_model
+    device = detector.device
+
+    input_tensor = preprocess_pil(analyzed_img).to(device)
+    input_tensor.requires_grad_(True)
+
+    target_layer = get_target_layer(primary)
+    gradcam = GradCAM(primary, target_layer)
 
     try:
-        model.eval()
-
-        # 단일 forward pass
-        output = model(input_tensor)
-        probs = torch.softmax(output, dim=1)[0]
-        fake_prob = float(probs[1].item())
-        real_prob = float(probs[0].item())
-        label = "FAKE" if fake_prob >= threshold else "REAL"
-        target_class = 1 if label == "FAKE" else 0
-
-        # GradCAM용 backward pass
-        model.zero_grad()
+        primary.eval()
+        output = primary(input_tensor)
+        primary.zero_grad()
         one_hot = torch.zeros_like(output)
         one_hot[0, target_class] = 1
         output.backward(gradient=one_hot)
 
-        # 캡처된 gradient/activation으로 heatmap 계산
         weights = gradcam.gradients.mean(dim=(2, 3), keepdim=True)
         cam = F.relu((weights * gradcam.activations).sum(dim=1, keepdim=True))
         cam = cam.squeeze().cpu().detach().numpy()
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
-
     finally:
         gradcam.remove_hooks()
 
     return {
-        "label": label,
-        "fake_probability": fake_prob,
-        "real_probability": real_prob,
+        "success": True,
+        "label": result["label"],
+        "fake_probability": result["fake_probability"],
+        "real_probability": result["real_probability"],
         "heatmap_array": cam,
+        "analyzed_img": analyzed_img,
     }
 
 
@@ -97,6 +101,7 @@ async def detect_image(request: Request, file: UploadFile = File(...)):
     Deepfake detection endpoint.
     - Max file size: 30MB
     - Allowed formats: JPG, PNG, GIF, WEBP
+    - 얼굴이 감지되지 않으면 422 반환
     """
     image_bytes = await file.read()
     validate_image_file(file, image_bytes)
@@ -109,11 +114,17 @@ async def detect_image(request: Request, file: UploadFile = File(...)):
             detail="파일을 이미지로 열 수 없습니다. 유효한 이미지 파일인지 확인해주세요."
         )
 
-    model = request.app.state.model
-    device = request.app.state.device
+    detector = request.app.state.model
+    result = _run_analysis(detector, img)
 
-    result = _run_analysis(model, img, device)
-    heatmap_img = generate_heatmap_overlay(img, result["heatmap_array"])
+    if not result.get("success", True):
+        raise HTTPException(
+            status_code=422,
+            detail=result.get("message", "분석에 실패했습니다.")
+        )
+
+    # heatmap은 얼굴 crop 위에, original_image는 원본 전체 이미지
+    heatmap_img = generate_heatmap_overlay(result["analyzed_img"], result["heatmap_array"])
 
     return DetectResponse(
         filename=file.filename or "unknown",

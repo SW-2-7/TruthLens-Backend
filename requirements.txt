@@ -5,7 +5,8 @@ pydantic
 pydantic-settings
 torch
 torchvision
-opencv-python
+opencv-python-headless
 pillow
 tqdm
 numpy
+facenet-pytorch

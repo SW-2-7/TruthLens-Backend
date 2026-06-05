@@ -61,8 +61,10 @@ class GradCAM:
 
 
 def get_target_layer(model: nn.Module) -> nn.Module:
-    if hasattr(model, "layer4"):
+    if hasattr(model, "layer4"):       # ResNet
         return model.layer4
+    if hasattr(model, "features"):     # EfficientNet / MobileNet
+        return model.features[-1]
     raise ValueError("Cannot find target layer for Grad-CAM")
 
 
